@@ -1,0 +1,51 @@
+name: Build fleur kernel (KSU)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev libncurses-dev \
+            build-essential zip unzip curl git python3 cpio lz4 xz-utils \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Clone kernel source (with KernelSU submodule)
+        uses: actions/checkout@v4
+        with:
+          repository: in1tialford/android_kernel_xiaomi_fleur
+          ref: fleur-r-oss
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Verify KernelSU is present
+        run: |
+          git submodule status
+          ls -la KernelSU | head
+
+      - name: Run build.sh
+        run: |
+          # build.sh uploads the zip to oshi.at when not run on the author's
+          # machine; drop that line so the job doesn't depend on it.
+          sed -i '/oshi\.at/d' build.sh
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Upload flashable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: fleur-kernel-zip
+          path: "*.zip"
+          if-no-files-found: error
